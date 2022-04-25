@@ -1,53 +1,63 @@
 const Note = require("../model/Note");
+const ApiError = require("../model/ApiError");
 
 class NoteDao {
   constructor() {
     this.notes = [];
   }
 
-  // Pre: title and text are not undefined, and title is not empty
   async create({ title, text }) {
-    const note = new Note(title, text);
-    this.notes.push(note);
+    if (title === undefined || title === "") {
+      throw new ApiError(400, "Every note must have a none-empty title!");
+    }
+
+    if (text === undefined) {
+      throw new ApiError(400, "Every note must have a text attribute!");
+    }
+
+    const note = await Note.create({ title, text });
     return note;
   }
 
-  // Pre: id is a valid note ID
   async update(id, { title, text }) {
-    const index = this.notes.findIndex((note) => note._id === id);
+    const note = await Note.findByIdAndUpdate(
+      id,
+      { title, text },
+      { new: true, runValidators: true }
+    );
 
-    if (title !== undefined) {
-      this.notes[index].title = title;
+    if (note === null) {
+      throw new ApiError(404, "There is no note with the given ID!");
     }
 
-    if (text !== undefined) {
-      this.notes[index].text = text;
-    }
-
-    return this.notes[index];
-  }
-
-
-  // Pre: id is a valid note ID
-  async delete(id) {
-    const index = this.notes.findIndex((note) => note._id === id);
-    const note = this.notes[index];
-    this.notes.splice(index, 1);
     return note;
   }
 
-  // Pre: id is a valid note ID
-  async read(id) {
-    return this.notes.find((note) => note._id === id);
+  async delete(id) {
+    const note = await Note.findByIdAndDelete(id);
+
+    if (note === null) {
+      throw new ApiError(404, "There is no note with the given ID!");
+    }
+
+    return note;
   }
 
+  // returns an empty array if there is no note with the given ID
+  async read(id) {
+    const note = await Note.findById(id);
+    return note ? note : [];
+  }
+
+  // returns an empty array if there is no note in the database
+  //  or no note matches the search query
   async readAll(query = "") {
     if (query !== "") {
-      return this.notes.filter(
-        (note) => note.title.includes(query) || note.text.includes(query)
-      );
+      const notes = await Note.find().or([{ title: { "$regex": query, "$options": "i" } }, { text: { "$regex": query, "$options": "i" } }]);
+      return notes;
     }
-    return this.notes;
+    const notes = await Note.find({});
+    return notes;
   }
 }
 
